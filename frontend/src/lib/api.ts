@@ -1,4 +1,5 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+export const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+// TODO: retry on transient failures?
 
 export interface Task {
   id: number;
@@ -16,25 +17,25 @@ export interface HealthStatus {
   redisinsight_url?: string;
 }
 
-export async function fetchHealth(): Promise<HealthStatus> {
-  const res = await fetch(`${API_URL}/health`);
+export async function getHealth(): Promise<HealthStatus> {
+  const res = await fetch(`${baseUrl}/health`);
   if (!res.ok) throw new Error("Health check failed");
   return res.json();
 }
 
-export async function fetchTasks(): Promise<Task[]> {
-  const res = await fetch(`${API_URL}/api/tasks`);
-  if (!res.ok) throw new Error("Failed to fetch tasks");
+export async function loadTasks(): Promise<Task[]> {
+  const res = await fetch(`${baseUrl}/api/tasks`);
+  if (!res.ok) throw new Error("Could not load tasks");
   return res.json();
 }
 
 export async function createTask(title: string, completed = false): Promise<Task> {
-  const res = await fetch(`${API_URL}/api/tasks`, {
+  const res = await fetch(`${baseUrl}/api/tasks`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title, completed }),
   });
-  if (!res.ok) throw new Error("Failed to create task");
+  if (!res.ok) throw new Error("Create failed");
   return res.json();
 }
 
@@ -42,16 +43,16 @@ export async function updateTask(
   id: number,
   data: { title?: string; completed?: boolean }
 ): Promise<Task> {
-  const res = await fetch(`${API_URL}/api/tasks/${id}`, {
+  const res = await fetch(`${baseUrl}/api/tasks/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error("Failed to update task");
+  if (!res.ok) throw new Error("Update failed");
   return res.json();
 }
 
 export async function deleteTask(id: number): Promise<void> {
-  const res = await fetch(`${API_URL}/api/tasks/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("Failed to delete task");
+  const res = await fetch(`${baseUrl}/api/tasks/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Delete failed");
 }

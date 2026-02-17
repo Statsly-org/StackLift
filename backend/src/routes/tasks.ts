@@ -1,65 +1,70 @@
 import { Router, Request, Response } from "express";
-import { query } from "../db.js";
+import { runQuery } from "../db.js";
 import { redis } from "../redis.js";
 import { logger } from "../utils/logger.js";
 
-export const tasksRouter = Router();
-const CACHE_KEY = "tasks:all";
-const CACHE_TTL = 60;
+const router = Router();
+const taskListCacheKey = "tasks:all";
+const cacheSeconds = 60;
 
-tasksRouter.get("/", async (req: Request, res: Response) => {
+function invalidateTaskCache(): void {
+  redis.del(taskListCacheKey).catch(() => {
+    logger.warn("cache invalidation failed");
+  });
+}
+
+export const tasksRouter = router;
+
+// TODO: pagination if task list grows
+router.get("/", async (req: Request, res: Response) => {
   try {
     try {
-      const cached = await redis.get(CACHE_KEY);
+      const cached = await redis.get(taskListCacheKey);
       if (cached) {
         return res.json(JSON.parse(cached));
       }
     } catch {
-      // Redis unavailable, fall through to DB
+      // cache miss, using db
     }
 
-    const result = await query(
+    const result = await runQuery(
       "SELECT id, title, completed, created_at FROM tasks ORDER BY created_at DESC"
     );
     const tasks = result.rows;
 
     try {
-      await redis.setex(CACHE_KEY, CACHE_TTL, JSON.stringify(tasks));
+      await redis.setex(taskListCacheKey, cacheSeconds, JSON.stringify(tasks));
     } catch {
-      // Redis unavailable, ignore cache
+      // skip cache write
     }
 
     res.json(tasks);
   } catch (err) {
-    logger.error("GET /api/tasks failed", { err });
-    res.status(500).json({ error: "Failed to fetch tasks" });
+    logger.error("list tasks failed", { err });
+    res.status(500).json({ error: "Could not load tasks" });
   }
 });
 
-tasksRouter.get("/:id", async (req: Request, res: Response) => {
+router.get("/:id", async (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
-  if (isNaN(id)) {
-    return res.status(400).json({ error: "Invalid task ID" });
-  }
+  if (isNaN(id)) return res.status(400).json({ error: "Invalid task ID" });
 
   try {
-    const result = await query(
+    const result = await runQuery(
       "SELECT id, title, completed, created_at FROM tasks WHERE id = $1",
       [id]
     );
+    const row = result.rows[0];
+    if (!row) return res.status(404).json({ error: "Task not found" });
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Task not found" });
-    }
-
-    res.json(result.rows[0]);
+    res.json(row);
   } catch (err) {
-    logger.error("GET /api/tasks/:id failed", { err });
-    res.status(500).json({ error: "Failed to fetch task" });
+    logger.warn("couldn't fetch task", { err });
+    res.status(500).json({ error: "Task not found" });
   }
 });
 
-tasksRouter.post("/", async (req: Request, res: Response) => {
+router.post("/", async (req: Request, res: Response) => {
   const { title, completed = false } = req.body;
 
   if (!title || typeof title !== "string") {
@@ -67,25 +72,21 @@ tasksRouter.post("/", async (req: Request, res: Response) => {
   }
 
   try {
-    const result = await query(
+    const result = await runQuery(
       "INSERT INTO tasks (title, completed) VALUES ($1, $2) RETURNING id, title, completed, created_at",
       [title.trim(), Boolean(completed)]
     );
 
-    try {
-      await redis.del(CACHE_KEY);
-    } catch {
-      // Redis unavailable
-    }
+    invalidateTaskCache();
 
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    logger.error("POST /api/tasks failed", { err });
-    res.status(500).json({ error: "Failed to create task" });
+    logger.error("create failed", { err });
+    res.status(500).json({ error: "Could not create task" });
   }
 });
 
-tasksRouter.put("/:id", async (req: Request, res: Response) => {
+router.put("/:id", async (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) {
     return res.status(400).json({ error: "Invalid task ID" });
@@ -113,7 +114,7 @@ tasksRouter.put("/:id", async (req: Request, res: Response) => {
   values.push(id);
 
   try {
-    const result = await query(
+    const result = await runQuery(
       `UPDATE tasks SET ${updates.join(", ")} WHERE id = $${paramIndex} RETURNING id, title, completed, created_at`,
       values
     );
@@ -122,27 +123,23 @@ tasksRouter.put("/:id", async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Task not found" });
     }
 
-    try {
-      await redis.del(CACHE_KEY);
-    } catch {
-      // Redis unavailable
-    }
+    invalidateTaskCache();
 
     res.json(result.rows[0]);
   } catch (err) {
-    logger.error("PUT /api/tasks/:id failed", { err });
-    res.status(500).json({ error: "Failed to update task" });
+    logger.error("update failed", { err });
+    res.status(500).json({ error: "Could not update task" });
   }
 });
 
-tasksRouter.delete("/:id", async (req: Request, res: Response) => {
+router.delete("/:id", async (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) {
     return res.status(400).json({ error: "Invalid task ID" });
   }
 
   try {
-    const result = await query("DELETE FROM tasks WHERE id = $1 RETURNING id", [
+    const result = await runQuery("DELETE FROM tasks WHERE id = $1 RETURNING id", [
       id,
     ]);
 
@@ -150,15 +147,11 @@ tasksRouter.delete("/:id", async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Task not found" });
     }
 
-    try {
-      await redis.del(CACHE_KEY);
-    } catch {
-      // Redis unavailable
-    }
+    invalidateTaskCache();
 
     res.status(204).send();
   } catch (err) {
-    logger.error("DELETE /api/tasks/:id failed", { err });
-    res.status(500).json({ error: "Failed to delete task" });
+    logger.warn("delete failed", { err });
+    res.status(500).json({ error: "Could not delete task" });
   }
 });

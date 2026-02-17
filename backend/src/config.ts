@@ -1,3 +1,4 @@
+// Early if config is wrong.
 function validateEnv() {
   const errors: string[] = [];
 

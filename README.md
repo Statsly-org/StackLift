@@ -104,10 +104,21 @@ StackLift/
 ├── database/init/    # PostgreSQL init scripts
 ├── config/pgadmin/   # pgAdmin config
 ├── img/              # Screenshots and assets
-├── scripts/setup.sh  # Setup script
+├── scripts/
+│   ├── setup.sh      # Setup script
+│   ├── lint.bat / lint.sh    # Run lint in backend + frontend
+│   ├── build.bat / build.sh  # Run build in both
+│   └── install.bat / install.sh  # npm install in both
 ├── stacklift.config.env.example
 └── docker-compose.yml
 ```
+
+### Root scripts (lint, build, install)
+
+From project root, run lint/build/install across backend and frontend:
+
+- **Windows:** `scripts\lint.bat`, `scripts\build.bat`, `scripts\install.bat`
+- **Linux/macOS:** `./scripts/lint.sh`, `./scripts/build.sh`, `./scripts/install.sh`
 
 ---
 
@@ -116,5 +127,9 @@ StackLift/
 MIT. See [LICENSE](LICENSE).
 
 ---
+
+<div>
+  <img src="img/logo2-light.png" alt="StackLift" width="100">
+</div>
 
 *StackLift by [Statix](https://statsly.org/)*

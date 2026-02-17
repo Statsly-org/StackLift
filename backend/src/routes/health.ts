@@ -1,17 +1,19 @@
 import { Router } from "express";
-import { query } from "../db.js";
+import { runQuery } from "../db.js";
 import { redis } from "../redis.js";
 
-export const healthRouter = Router();
+const router = Router();
+export const healthRouter = router;
 
-healthRouter.get("/health", async (_req, res) => {
+// Check if db and redis is available.
+router.get("/health", async (_req, res) => {
   const status: Record<string, string> = {
     status: "ok",
     timestamp: new Date().toISOString(),
   };
 
   try {
-    await query("SELECT 1");
+    await runQuery("SELECT 1");
     status.database = "connected";
   } catch {
     status.database = "error";

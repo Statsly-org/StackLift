@@ -1,5 +1,7 @@
 type LogLevel = "debug" | "info" | "warn" | "error";
 
+// TODO: file rotation for prod
+
 const LEVELS: Record<LogLevel, number> = {
   debug: 0,
   info: 1,
@@ -13,7 +15,7 @@ function shouldLog(level: LogLevel): boolean {
   return LEVELS[level] >= LEVELS[currentLevel];
 }
 
-function formatTime(): string {
+function getTimeStr(): string {
   const now = new Date();
   return now.toTimeString().slice(0, 8);
 }
@@ -25,7 +27,7 @@ function formatMetaValue(v: unknown): string {
 }
 
 function formatMessage(level: LogLevel, message: string, meta?: Record<string, unknown>): string {
-  const time = formatTime();
+  const time = getTimeStr();
   const levelTag = level.toUpperCase().padEnd(5);
   let line = `[${time}] ${levelTag}  ${message}`;
   if (meta && Object.keys(meta).length > 0) {

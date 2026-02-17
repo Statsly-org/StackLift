@@ -2,113 +2,123 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  fetchHealth,
-  fetchTasks,
-  createTask,
-  updateTask,
-  deleteTask,
-  type Task,
-  type HealthStatus,
-} from "@/lib/api";
+import { getHealth, type HealthStatus } from "@/lib/api";
+
+const STORAGE_KEY = "stacklift-dev-checklist";
+const CUSTOM_KEY = "stacklift-custom-items";
+
+const PRESETS: { id: string; label: string }[] = [
+  { id: "docker-up", label: "Docker Compose running" },
+  { id: "env-setup", label: ".env and pgpass configured" },
+  { id: "migrations", label: "DB migrations applied" },
+  { id: "frontend", label: "Frontend reachable at localhost:3000" },
+  { id: "backend", label: "Backend API reachable at localhost:3001" },
+  { id: "pgadmin", label: "pgAdmin set up for PostgreSQL" },
+  { id: "redisinsight", label: "RedisInsight set up for Redis" },
+];
+
+type CustomItem = { id: string; label: string };
+
+function readState(): Record<string, boolean> {
+  if (typeof window === "undefined") return {};
+  try {
+    const s = localStorage.getItem(STORAGE_KEY);
+    return s ? JSON.parse(s) : {};
+  } catch {
+    return {};
+  }
+}
+
+function readCustom(): CustomItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const s = localStorage.getItem(CUSTOM_KEY);
+    return s ? JSON.parse(s) : [];
+  } catch {
+    return [];
+  }
+}
 
 export default function Home() {
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [tasksError, setTasksError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [newTitle, setNewTitle] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editTitle, setEditTitle] = useState("");
+  const [done, setDone] = useState<Record<string, boolean>>({});
+  const [custom, setCustom] = useState<CustomItem[]>([]);
+  const [newLabel, setNewLabel] = useState("");
+  const [adding, setAdding] = useState(false);
 
-  const loadData = async () => {
+  const fetchHealth = async () => {
     setLoading(true);
     setHealthError(null);
-    setTasksError(null);
-
     try {
-      const [healthData, tasksData] = await Promise.all([
-        fetchHealth(),
-        fetchTasks(),
-      ]);
-      setHealth(healthData);
-      setTasks(tasksData);
-    } catch (err) {
-      setHealthError(err instanceof Error ? err.message : "Connection failed");
-      setTasksError(err instanceof Error ? err.message : "Connection failed");
+      const data = await getHealth();
+      setHealth(data);
+    } catch (e) {
+      setHealthError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    fetchHealth();
+    setDone(readState());
+    setCustom(readCustom());
   }, []);
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const flip = (id: string) => {
+    const next = { ...done, [id]: !done[id] };
+    setDone(next);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      console.warn("localStorage write failed");
+    }
+  };
+
+  const addItem = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle.trim() || submitting) return;
-    setSubmitting(true);
+    const label = newLabel?.trim();
+    if (!label || adding) return;
+    setAdding(true);
+    const item: CustomItem = {
+      id: `c-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      label,
+    };
+    const next = [...custom, item];
+    setCustom(next);
+    setNewLabel("");
+    setAdding(false);
     try {
-      const task = await createTask(newTitle.trim());
-      setTasks((prev) => [task, ...prev]);
-      setNewTitle("");
-    } catch (err) {
-      setTasksError(err instanceof Error ? err.message : "Failed to create");
-    } finally {
-      setSubmitting(false);
+      localStorage.setItem(CUSTOM_KEY, JSON.stringify(next));
+    } catch {
+      console.warn("localStorage write failed");
     }
   };
 
-  const handleToggle = async (task: Task) => {
+  const dropItem = (id: string) => {
+    const next = custom.filter((c) => c.id !== id);
+    setCustom(next);
+    const nextDone = { ...done };
+    delete nextDone[id];
+    setDone(nextDone);
     try {
-      const updated = await updateTask(task.id, {
-        completed: !task.completed,
-      });
-      setTasks((prev) =>
-        prev.map((t) => (t.id === task.id ? updated : t))
-      );
-    } catch (err) {
-      setTasksError(err instanceof Error ? err.message : "Failed to update");
+      localStorage.setItem(CUSTOM_KEY, JSON.stringify(next));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(nextDone));
+    } catch {
+      console.warn("localStorage write failed");
     }
   };
 
-  const handleEdit = (task: Task) => {
-    setEditingId(task.id);
-    setEditTitle(task.title);
-  };
-
-  const handleSaveEdit = async () => {
-    if (editingId === null) return;
-    try {
-      const updated = await updateTask(editingId, { title: editTitle.trim() });
-      setTasks((prev) =>
-        prev.map((t) => (t.id === editingId ? updated : t))
-      );
-      setEditingId(null);
-      setEditTitle("");
-    } catch (err) {
-      setTasksError(err instanceof Error ? err.message : "Failed to update");
-    }
-  };
-
-  const handleDelete = async (id: number) => {
-    try {
-      await deleteTask(id);
-      setTasks((prev) => prev.filter((t) => t.id !== id));
-    } catch (err) {
-      setTasksError(err instanceof Error ? err.message : "Failed to delete");
-    }
-  };
+  const allItems = [...PRESETS, ...custom];
 
   return (
     <div className="min-h-full">
       <div className="max-w-2xl mx-auto px-6 py-12 pb-16">
         <header className="mb-14 flex items-center justify-between">
           <div>
-            <h1 className="font-mono text-3xl font-bold text-[var(--foreground)] tracking-tight">
+            <h1 className="font-mono text-3xl font-bold text-[var(--foreground)] tracking-tight" suppressHydrationWarning>
               StackLift
             </h1>
             <p className="text-[var(--foreground)]/60 mt-2 text-sm">
@@ -151,112 +161,63 @@ export default function Home() {
         </section>
 
         <section className="p-6 rounded-[var(--radius)] border border-[var(--card-border)] bg-[var(--card)] shadow-[var(--shadow-md)] hover:shadow-[var(--shadow-lg)] hover:border-[var(--accent)]/20 transition-all duration-200">
-          <h2 className="text-xs font-semibold text-[var(--accent)] mb-5 uppercase tracking-widest">
+          <h2 className="text-xs font-semibold text-[var(--accent)] mb-4 uppercase tracking-widest">
             Dev Checklist
           </h2>
 
-          <form onSubmit={handleCreate} className="flex gap-3 mb-6">
+          <form onSubmit={addItem} className="flex gap-2 mb-5">
             <input
               type="text"
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              placeholder="Add a dev reminder or note..."
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              placeholder="Add your own..."
               className="flex-1 px-4 py-2.5 rounded-[var(--radius-sm)] border border-[var(--card-border)] bg-[var(--background)] text-[var(--foreground)] placeholder:text-[var(--foreground)]/40 focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50 transition-[var(--transition)]"
-              disabled={submitting}
+              disabled={adding}
             />
             <button
               type="submit"
-              disabled={!newTitle.trim() || submitting}
-              className="px-5 py-2.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-[var(--transition)]"
+              disabled={!newLabel?.trim() || adding}
+              className="px-4 py-2.5 rounded-[var(--radius-sm)] bg-[var(--accent)] text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-[var(--transition)]"
             >
               Add
             </button>
           </form>
 
-          {tasksError && (
-            <p className="text-sm text-red-500 mb-4">{tasksError}</p>
-          )}
-
-          {loading ? (
-            <p className="text-sm text-[var(--foreground)]/60 py-4">Loading...</p>
-          ) : (
-            <ul className="space-y-2">
-              {tasks.map((task) => (
-                <li
-                  key={task.id}
-                  className="flex items-center gap-3 p-4 rounded-[var(--radius-sm)] border border-[var(--card-border)] bg-[var(--background)]/50 hover:border-[var(--accent)]/30 transition-[var(--transition)]"
+          <ul className="space-y-1.5">
+            {allItems.map((item) => (
+              <li
+                key={item.id}
+                className="group flex items-center gap-3 py-3 px-4 rounded-lg border border-transparent hover:border-[var(--accent)]/20 hover:bg-[var(--background)]/50 transition-colors"
+              >
+                <input
+                  type="checkbox"
+                  checked={!!done[item.id]}
+                  onChange={() => flip(item.id)}
+                  className="w-4 h-4 rounded border-[var(--card-border)] text-[var(--accent)] focus:ring-[var(--accent)] cursor-pointer shrink-0"
+                />
+                <span
+                  className={`flex-1 text-[var(--foreground)] text-sm ${
+                    done[item.id] ? "line-through opacity-55" : ""
+                  }`}
                 >
-                  <input
-                    type="checkbox"
-                    checked={task.completed}
-                    onChange={() => handleToggle(task)}
-                    className="w-4 h-4 rounded border-[var(--card-border)] text-[var(--accent)] focus:ring-[var(--accent)]"
-                  />
-                  {editingId === task.id ? (
-                    <>
-                      <input
-                        type="text"
-                        value={editTitle}
-                        onChange={(e) => setEditTitle(e.target.value)}
-                        onKeyDown={(e) =>
-                          e.key === "Enter" && handleSaveEdit()
-                        }
-                        className="flex-1 px-3 py-1.5 rounded border border-[var(--card-border)] bg-[var(--card)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50"
-                        autoFocus
-                      />
-                      <div className="flex gap-2">
-                        <button
-                          onClick={handleSaveEdit}
-                          className="text-sm font-medium text-emerald-600 hover:text-emerald-500"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditingId(null);
-                            setEditTitle("");
-                          }}
-                          className="text-sm text-[var(--foreground)]/60 hover:text-[var(--foreground)]"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <span
-                        className={`flex-1 text-[var(--foreground)] ${
-                          task.completed
-                            ? "line-through opacity-60"
-                            : ""
-                        }`}
-                      >
-                        {task.title}
-                      </span>
-                      <div className="flex gap-3">
-                        <button
-                          onClick={() => handleEdit(task)}
-                          className="text-sm font-medium text-[var(--accent)] hover:underline"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(task.id)}
-                          className="text-sm font-medium text-red-500 hover:underline"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+                  {item.label}
+                </span>
+                {custom.some((c) => c.id === item.id) && (
+                  <button
+                    type="button"
+                    onClick={() => dropItem(item.id)}
+                    className="opacity-0 group-hover:opacity-100 text-[var(--foreground)]/50 hover:text-red-500 text-xs transition-opacity"
+                  >
+                    Remove
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
 
-          {!loading && tasks.length === 0 && !tasksError && (
-            <p className="text-sm text-[var(--foreground)]/60 py-8 text-center">
-              Nothing here yet. Add a reminder above.
+          {allItems.length === 0 && (
+            <p className="text-sm text-[var(--foreground)]/50 py-6 text-center">
+              No items yet. Add one above.
             </p>
           )}
         </section>

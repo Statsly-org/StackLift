@@ -9,7 +9,7 @@ services:
     volumes:
       - ./backend:/app
       - /app/node_modules
-    command: sh -c "node-pg-migrate up && npm run dev"
+    command: sh -c "npm run migrate:up && npm run dev"
 
   frontend:
     build:
@@ -20,8 +20,7 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
-      - /app/.next
     environment:
       NODE_ENV: development
       WATCHPACK_POLLING: "true"
-    command: npm run dev
+    command: sh -c "npm ci && npm run dev"

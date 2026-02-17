@@ -2,11 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { fetchHealth, type HealthStatus } from "@/lib/api";
+import { getHealth, baseUrl, type HealthStatus } from "@/lib/api";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-
-function StatusBadge({ status }: { status: string }) {
+function StatusDot({ status }: { status: string }) {
   const isOk = status === "connected" || status === "ok";
   return (
     <span
@@ -29,21 +27,21 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
-  const loadHealth = async () => {
+  const checkHealth = async () => {
     try {
-      const data = await fetchHealth();
+      const data = await getHealth();
       setHealth(data);
       setError(null);
       setLastUpdate(new Date());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Connection failed");
+      setError(err && typeof err === "object" && "message" in err ? (err as Error).message : "Can't reach API");
       setHealth(null);
     }
   };
 
   useEffect(() => {
-    loadHealth();
-    const interval = setInterval(loadHealth, 10000);
+    checkHealth();
+    const interval = setInterval(checkHealth, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -65,7 +63,7 @@ export default function DashboardPage() {
               Service status · auto-refresh every 10s
             </p>
           </div>
-          {lastUpdate && (
+          {lastUpdate != null && (
             <span className="text-xs text-[var(--foreground)]/50 font-mono tabular-nums">
               {lastUpdate.toLocaleTimeString()}
             </span>
@@ -76,7 +74,7 @@ export default function DashboardPage() {
           <div className="mb-6 p-6 rounded-[var(--radius)] border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/10">
             <p className="text-red-600 dark:text-red-400">{error}</p>
             <button
-              onClick={loadHealth}
+              onClick={checkHealth}
               className="mt-3 text-sm font-medium text-red-600 hover:underline"
             >
               Retry
@@ -93,15 +91,15 @@ export default function DashboardPage() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between py-3 first:pt-0">
                   <span className="text-[var(--foreground)] font-medium">Backend API</span>
-                  <StatusBadge status={health.status} />
+                  <StatusDot status={health.status} />
                 </div>
                 <div className="flex items-center justify-between py-3 border-t border-[var(--card-border)]">
                   <span className="text-[var(--foreground)] font-medium">PostgreSQL</span>
-                  <StatusBadge status={health.database} />
+                  <StatusDot status={health.database} />
                 </div>
                 <div className="flex items-center justify-between py-3 border-t border-[var(--card-border)]">
                   <span className="text-[var(--foreground)] font-medium">Redis</span>
-                  <StatusBadge status={health.redis} />
+                  <StatusDot status={health.redis} />
                 </div>
               </div>
             </section>
@@ -155,7 +153,7 @@ export default function DashboardPage() {
                 API
               </h2>
               <a
-                href={`${API_URL}/health`}
+                href={`${baseUrl}/health`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 text-sm font-medium text-[var(--accent)] hover:text-[var(--accent-hover)] transition-colors"

@@ -1,12 +1,14 @@
 import pg from "pg";
 
-const pool = new pg.Pool({
+// single pool cause why not lol
+const pgPool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
 });
+// TODO: tune pool (max, idleTimeout) when we scale
 
-export async function query<T extends pg.QueryResultRow = pg.QueryResultRow>(
+export async function runQuery<T extends pg.QueryResultRow = pg.QueryResultRow>(
   text: string,
   params?: unknown[]
 ): Promise<pg.QueryResult<T>> {
-  return pool.query<T>(text, params);
+  return pgPool.query<T>(text, params);
 }
