@@ -53,14 +53,13 @@ Changes to `backend/` and `frontend/` are picked up automatically. No rebuild ne
 
 ### Windows
 
-`setup.sh` requires Bash. On Windows:
+Run the setup script:
 
-1. Copy `stacklift.config.env.example` to `stacklift.config.env`
-2. Create `.env` with the same variables as in the setup script output (see [scripts/setup.sh](scripts/setup.sh) for the template)
-3. Create `config/pgadmin/pgpass` with: `postgres:5432:*:postgres:YOUR_PASSWORD`
-4. Run `docker compose up`
+```bash
+scripts\setup.bat
+```
 
-Or use WSL or Git Bash to run `./scripts/setup.sh`.
+Then start with `docker compose up`. Or use WSL / Git Bash to run `./scripts/setup.sh`.
 
 ---
 
@@ -105,7 +104,8 @@ StackLift/
 ├── config/pgadmin/   # pgAdmin config
 ├── img/              # Screenshots and assets
 ├── scripts/
-│   ├── setup.sh      # Setup script
+│   ├── setup.sh      # Setup (Linux/macOS)
+│   ├── setup.bat     # Setup (Windows)
 │   ├── lint.bat / lint.sh    # Run lint in backend + frontend
 │   ├── build.bat / build.sh  # Run build in both
 │   └── install.bat / install.sh  # npm install in both
