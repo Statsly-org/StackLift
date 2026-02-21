@@ -6,7 +6,7 @@
 
 Self-hosted dev environment starter. One command starts frontend (Next.js), backend (Express), PostgreSQL, Redis, pgAdmin, and RedisInsight.
 
-**By [Statix](https://statsly.org/)** – Side project alongside [Statsly](https://statsly.org/), actively maintained and updated.
+**By [St3ix](https://st3ix.net/)** – Side project alongside [Statsly](https://statsly.org/), actively maintained and updated.
 
 ```bash
 git clone https://github.com/Statsly-org/StackLift.git
